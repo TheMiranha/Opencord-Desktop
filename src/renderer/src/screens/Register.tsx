@@ -14,7 +14,7 @@ export function Register() {
     const apiUrl = localStorage.getItem('API_URL')
 
     try {
-      const res = await fetch(`${apiUrl}/auth/register`, {
+      const res = await fetch(`${apiUrl}/auth/sign-up`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password })
@@ -22,7 +22,6 @@ export function Register() {
 
       if (!res.ok) throw new Error('Erro ao registrar. Verifique os dados ou o servidor.')
       
-      alert('Conta criada com sucesso! Faça login.')
       navigate('/login')
 
     } catch (err: any) {
