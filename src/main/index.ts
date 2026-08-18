@@ -1,15 +1,39 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset'
 import { autoUpdater } from 'electron-updater'
+import icon from '../../resources/icon.png?asset'
 
-function createWindow(): void {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
+let mainWindow: BrowserWindow | null = null
+let splashWindow: BrowserWindow | null = null
+
+function createSplashWindow() {
+  splashWindow = new BrowserWindow({
+    width: 300,
+    height: 350,
+    frame: false,       // Sem as bordas do Windows
+    transparent: true,  // Fundo transparente para os cantos arredondados do HTML funcionarem
+    resizable: false,
+    alwaysOnTop: true,  // Fica por cima de tudo estilo Discord
+    webPreferences: {
+      nodeIntegration: true, // Permite o require('electron') no HTML
+      contextIsolation: false
+    }
+  })
+
+  // Carrega o splash.html
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    splashWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/splash.html`)
+  } else {
+    splashWindow.loadFile(join(__dirname, '../renderer/splash.html'))
+  }
+}
+
+function createMainWindow() {
+  mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
-    show: false,
+    show: false, // INICIA OCULTA! Só aparece quando não tiver atualização
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -18,17 +42,6 @@ function createWindow(): void {
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
-  })
-
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
-
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -36,46 +49,68 @@ function createWindow(): void {
   }
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
-
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
+  electronApp.setAppUserModelId('com.miranda.opencord')
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  // Cria as duas janelas
+  createSplashWindow()
+  createMainWindow()
 
-  createWindow()
-
-  app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
-
-  autoUpdater.checkForUpdatesAndNotify()
-
-  autoUpdater.on('update-downloaded', () => {
-    console.log('Atualização baixada. Será instalada ao fechar o app.')
-  })
-})
-
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
+  // --- LÓGICA DO UPDATER (ESTILO DISCORD) ---
+  
+  // Se estivermos rodando no ambiente de desenvolvimento (Vite local), pula a atualização
+  if (is.dev) {
+    setTimeout(() => {
+      splashWindow?.close()
+      mainWindow?.show()
+    }, 1500)
+    return
   }
-})
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
+  // Manda o motor checar se tem versão nova lá no seu GitHub
+  autoUpdater.checkForUpdates()
+
+  autoUpdater.on('checking-for-update', () => {
+    splashWindow?.webContents.send('updater-message', 'Buscando atualizações...')
+  })
+
+  autoUpdater.on('update-available', () => {
+    splashWindow?.webContents.send('updater-message', 'Baixando atualização...')
+  })
+
+  // SE ESTIVER NA ÚLTIMA VERSÃO: Fecha o splash e mostra o chat!
+  autoUpdater.on('update-not-available', () => {
+    splashWindow?.webContents.send('updater-message', 'Iniciando Opencord...')
+    setTimeout(() => {
+      splashWindow?.close()
+      mainWindow?.show()
+    }, 1500) // Dá 1.5s só pro usuário ver a tela e não ser um flash abrupto
+  })
+
+  // SE DEU ERRO (Sem internet, por exemplo): Pula e abre o app mesmo assim
+  autoUpdater.on('error', (err) => {
+    splashWindow?.webContents.send('updater-message', 'Erro ao atualizar. Iniciando...')
+    setTimeout(() => {
+      splashWindow?.close()
+      mainWindow?.show()
+    }, 2000)
+  })
+
+  // ENCHENDO A BARRA DE PROGRESSO
+  autoUpdater.on('download-progress', (progressObj) => {
+    let percent = Math.round(progressObj.percent)
+    splashWindow?.webContents.send('updater-message', `Baixando... ${percent}%`)
+    splashWindow?.webContents.send('updater-progress', percent)
+  })
+
+  // QUANDO TERMINAR DE BAIXAR A VERSÃO NOVA
+  autoUpdater.on('update-downloaded', () => {
+    splashWindow?.webContents.send('updater-message', 'Instalando atualização...')
+    setTimeout(() => {
+      autoUpdater.quitAndInstall() // Fecha o app atual, instala o novo e abre sozinho
+    }, 1500)
+  })
+})

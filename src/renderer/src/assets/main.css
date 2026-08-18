@@ -7,3 +7,24 @@
     @apply bg-[#1e1f22] text-discord-textNormal antialiased overflow-hidden selection:bg-discord-blurple selection:text-white;
   }
 }
+
+/* --- SCROLLBAR ESTILO DISCORD --- */
+/* --- SCROLLBAR ESTILO DISCORD (MAIS CLARA) --- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #2b2d31; /* Fundo da barra agora tem uma cor sólida levemente mais clara */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #404249; /* Cor da barrinha mais clara para dar contraste */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5c5e66; /* Fica ainda mais clara ao passar o mouse */
+}
