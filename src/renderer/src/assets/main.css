@@ -28,3 +28,12 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #5c5e66; /* Fica ainda mais clara ao passar o mouse */
 }
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+/* Evita que botões fiquem bloqueados dentro da área de arrasto */
+.no-drag {
+  -webkit-app-region: no-drag;
+}

@@ -1,10 +1,10 @@
 {
   "name": "opencord-desktop",
-  "version": "1.0.2",
+  "version": "1.0.9",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "TheMiranha",
+  "homepage": "https://github.com/TheMiranha/Opencord-Desktop",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
