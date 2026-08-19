@@ -2,26 +2,37 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
-import { app, BrowserWindow, ipcMain, desktopCapturer, shell } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  desktopCapturer,
+  shell,
+  globalShortcut,
+  Tray,
+  Menu,
+  nativeImage
+} from 'electron'
 
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let isQuitting = false
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
     width: 300,
     height: 350,
-    frame: false,       // Sem as bordas do Windows
-    transparent: true,  // Fundo transparente para os cantos arredondados do HTML funcionarem
+    frame: false,
+    transparent: true,
     resizable: false,
-    alwaysOnTop: true,  // Fica por cima de tudo estilo Discord
+    alwaysOnTop: true,
     webPreferences: {
-      nodeIntegration: true, // Permite o require('electron') no HTML
+      nodeIntegration: true,
       contextIsolation: false
     }
   })
 
-  // Carrega o splash.html
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     splashWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/splash.html`)
   } else {
@@ -30,27 +41,31 @@ function createSplashWindow() {
 }
 
 function createMainWindow() {
- mainWindow = new BrowserWindow({
-    width: 1280, // Começa bem maior
+  mainWindow = new BrowserWindow({
+    width: 1280,
     height: 720,
-    minWidth: 940, // Evita que o usuário esprema muito o layout
+    minWidth: 940,
     minHeight: 500,
     show: false,
     autoHideMenuBar: true,
-    
-    // --- MÁGICA DA BARRA CUSTOMIZADA ---
-    titleBarStyle: 'hidden', 
+    titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#1e1f22', // Cor exata da barra lateral do seu Opencord
-      symbolColor: '#80848e', // Cor cinza dos ícones (X, -, [])
-      height: 28 // Altura da barrinha
+      color: '#1e1f22',
+      symbolColor: '#80848e',
+      height: 28
     },
-    // -----------------------------------
-
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
+    }
+  })
+
+  // Close to Tray: Ao clicar no X, apenas esconde a janela em vez de fechar o app
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault()
+      mainWindow?.hide()
     }
   })
 
@@ -66,86 +81,210 @@ function createMainWindow() {
   }
 }
 
-app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.miranda.opencord')
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
+function createTray() {
+  if (tray) return
+
+  const trayIcon = nativeImage.createFromPath(icon)
+  tray = new Tray(trayIcon.resize({ width: 16, height: 16 }))
+  tray.setToolTip('Opencord')
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Abrir Opencord',
+      click: () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore()
+          mainWindow.show()
+          mainWindow.focus()
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Mutar / Desmutar Microfone',
+      click: () => {
+        mainWindow?.webContents.send('trigger-action', 'toggleMute')
+      }
+    },
+    {
+      label: 'Mutar Geral / Ensurdecer',
+      click: () => {
+        mainWindow?.webContents.send('trigger-action', 'toggleDeafen')
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Sair do Opencord',
+      click: () => {
+        isQuitting = true
+        app.quit()
+      }
+    }
+  ])
+
+  tray.setContextMenu(contextMenu)
+
+  // Clique na bandeja do sistema abre/foca o Opencord
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        if (mainWindow.isMinimized()) {
+          mainWindow.restore()
+        }
+        mainWindow.focus()
+      } else {
+        mainWindow.show()
+        mainWindow.focus()
+      }
+    }
   })
 
-  ipcMain.handle('get-desktop-sources', async () => {
-    const sources = await desktopCapturer.getSources({
-      types: ['window', 'screen'],
-      thumbnailSize: { width: 400, height: 400 }
+  tray.on('double-click', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+}
+
+// Single instance lock (apenas uma instância do app aberta por vez)
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+
+  app.whenReady().then(() => {
+    electronApp.setAppUserModelId('com.miranda.opencord')
+    app.on('browser-window-created', (_, window) => {
+      optimizer.watchWindowShortcuts(window)
     })
 
-    return sources.map(source => ({
-      id: source.id,
-      name: source.name,
-      thumbnail: source.thumbnail.toDataURL()
-    }))
+    ipcMain.handle('get-desktop-sources', async () => {
+      const sources = await desktopCapturer.getSources({
+        types: ['window', 'screen'],
+        thumbnailSize: { width: 400, height: 400 }
+      })
+
+      return sources.map((source) => ({
+        id: source.id,
+        name: source.name,
+        thumbnail: source.thumbnail.toDataURL()
+      }))
+    })
+
+    // Gerenciador de Atalhos Globais
+    ipcMain.on('register-global-shortcuts', (_, shortcuts: { toggleMute?: string; toggleDeafen?: string }) => {
+      globalShortcut.unregisterAll()
+
+      if (shortcuts.toggleMute) {
+        try {
+          globalShortcut.register(shortcuts.toggleMute, () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('trigger-action', 'toggleMute')
+            }
+          })
+        } catch (err) {
+          console.error('Falha ao registrar atalho global toggleMute:', err)
+        }
+      }
+
+      if (shortcuts.toggleDeafen) {
+        try {
+          globalShortcut.register(shortcuts.toggleDeafen, () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('trigger-action', 'toggleDeafen')
+            }
+          })
+        } catch (err) {
+          console.error('Falha ao registrar atalho global toggleDeafen:', err)
+        }
+      }
+    })
+
+    createSplashWindow()
+    createMainWindow()
+    createTray()
+
+    // Updater
+    if (is.dev) {
+      setTimeout(() => {
+        splashWindow?.close()
+        mainWindow?.show()
+      }, 1500)
+      return
+    }
+
+    autoUpdater.checkForUpdates()
+
+    autoUpdater.on('checking-for-update', () => {
+      splashWindow?.webContents.send('updater-message', 'Buscando atualizações...')
+    })
+
+    autoUpdater.on('update-available', () => {
+      splashWindow?.webContents.send('updater-message', 'Baixando atualização...')
+    })
+
+    autoUpdater.on('update-not-available', () => {
+      splashWindow?.webContents.send('updater-message', 'Iniciando Opencord...')
+      setTimeout(() => {
+        splashWindow?.close()
+        mainWindow?.show()
+      }, 1500)
+    })
+
+    autoUpdater.on('error', (err) => {
+      console.error('Erro no Auto-Updater:', err)
+      splashWindow?.webContents.send('updater-message', 'Erro ao atualizar. Iniciando...')
+      setTimeout(() => {
+        splashWindow?.close()
+        mainWindow?.show()
+      }, 2000)
+    })
+
+    autoUpdater.on('download-progress', (progressObj) => {
+      let percent = Math.round(progressObj.percent)
+      splashWindow?.webContents.send('updater-message', `Baixando... ${percent}%`)
+      splashWindow?.webContents.send('updater-progress', percent)
+    })
+
+    autoUpdater.on('update-downloaded', () => {
+      splashWindow?.webContents.send('updater-message', 'Instalando atualização...')
+      setTimeout(() => {
+        autoUpdater.quitAndInstall(true, true)
+      }, 1500)
+    })
   })
 
-  // Cria as duas janelas
-  createSplashWindow()
-  createMainWindow()
-
-  // --- LÓGICA DO UPDATER (ESTILO DISCORD) ---
-  
-  // Se estivermos rodando no ambiente de desenvolvimento (Vite local), pula a atualização
-  if (is.dev) {
-    setTimeout(() => {
-      splashWindow?.close()
-      mainWindow?.show()
-    }, 1500)
-    return
-  }
-
-  // Manda o motor checar se tem versão nova lá no seu GitHub
-  autoUpdater.checkForUpdates()
-
-  autoUpdater.on('checking-for-update', () => {
-    splashWindow?.webContents.send('updater-message', 'Buscando atualizações...')
+  app.on('before-quit', () => {
+    isQuitting = true
   })
 
-  autoUpdater.on('update-available', () => {
-    splashWindow?.webContents.send('updater-message', 'Baixando atualização...')
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll()
   })
 
-  // SE ESTIVER NA ÚLTIMA VERSÃO: Fecha o splash e mostra o chat!
-  autoUpdater.on('update-not-available', () => {
-    splashWindow?.webContents.send('updater-message', 'Iniciando Opencord...')
-    setTimeout(() => {
-      splashWindow?.close()
-      mainWindow?.show()
-    }, 1500) // Dá 1.5s só pro usuário ver a tela e não ser um flash abrupto
+  app.on('activate', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
   })
 
-  // SE DEU ERRO (Sem internet, por exemplo): Pula e abre o app mesmo assim
-// SE DEU ERRO (Sem internet, por exemplo): Pula e abre o app mesmo assim
-  autoUpdater.on('error', (err) => {
-    // Agora o 'err' está sendo lido e o build vai passar!
-    console.error('Erro no Auto-Updater:', err) 
-    
-    splashWindow?.webContents.send('updater-message', 'Erro ao atualizar. Iniciando...')
-    setTimeout(() => {
-      splashWindow?.close()
-      mainWindow?.show()
-    }, 2000)
+  app.on('window-all-closed', () => {
+    if (process.platform === 'darwin' || !isQuitting) {
+      // Continua rodando no Tray em segundo plano
+    } else {
+      app.quit()
+    }
   })
-
-  // ENCHENDO A BARRA DE PROGRESSO
-  autoUpdater.on('download-progress', (progressObj) => {
-    let percent = Math.round(progressObj.percent)
-    splashWindow?.webContents.send('updater-message', `Baixando... ${percent}%`)
-    splashWindow?.webContents.send('updater-progress', percent)
-  })
-
-  // QUANDO TERMINAR DE BAIXAR A VERSÃO NOVA
-  autoUpdater.on('update-downloaded', () => {
-    splashWindow?.webContents.send('updater-message', 'Instalando atualização...')
-    setTimeout(() => {
-     autoUpdater.quitAndInstall(true, true)
-    }, 1500)
-  })
-
-})
+}

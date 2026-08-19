@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SockJS from 'sockjs-client'
 import { Client } from '@stomp/stompjs'
@@ -10,9 +10,12 @@ import { useChannelStore } from '../stores/useChannelStore'
 import { useChatStore } from '../stores/useChatStore'
 import { useVoiceStore } from '../stores/useVoiceStore'
 import { useModalStore } from '../stores/useModalStore'
+import { useKeybindStore, matchesKeybind } from '../stores/useKeybindStore'
 
 import { ServerSidebar } from '../components/server/ServerSidebar'
 import { ChannelSidebar } from '../components/channel/ChannelSidebar'
+import { VoiceStatusBar } from '../components/voice/VoiceStatusBar'
+import { UserFooter } from '../components/user/UserFooter'
 import { ChatArea } from '../components/chat/ChatArea'
 import { VoiceArea } from '../components/voice/VoiceArea'
 import { Friends } from './Friends'
@@ -20,8 +23,11 @@ import { Settings } from './Settings'
 import { ScreenPicker } from './ScreenPicker'
 import { ServerModal } from '../components/modals/ServerModal'
 import { ServerInvitesModal } from '../components/modals/ServerInvitesModal'
+import { CreateChannelModal } from '../components/modals/CreateChannelModal'
+import { DeleteChannelModal } from '../components/modals/DeleteChannelModal'
 import { ServerMemberSidebar } from '../components/server/ServerMemberSidebar'
 import { ServerSettingsModal } from '../components/server/ServerSettingsModal'
+import { DMUserProfileSidebar } from '../components/user/DMUserProfileSidebar'
 import { MessageAttachment } from '../types'
 
 export function Dashboard(): React.JSX.Element {
@@ -61,9 +67,53 @@ export function Dashboard(): React.JSX.Element {
     setScreenSources
   } = useVoiceStore()
   const { isPickerOpen, isSettingsOpen, setIsPickerOpen, setIsSettingsOpen } = useModalStore()
+  const [dmVoiceViewMode, setDmVoiceViewMode] = useState<'voice' | 'chat'>('voice')
 
   const subscribedChannels = useRef<Set<string>>(new Set())
+  const subscribedServers = useRef<Set<string>>(new Set())
   const wasMutedRef = useRef(false)
+
+  const handleIncomingMessage = (msg: any) => {
+    const newMsg = JSON.parse(msg.body)
+    const chId = newMsg.channelId
+    if (!chId) return
+    addMessage(chId, newMsg)
+  }
+
+  const handleServerChannelEvent = (msg: any) => {
+    try {
+      const payload = JSON.parse(msg.body)
+      const { event, serverId, channel, channelId } = payload
+      if (!serverId) return
+
+      if (event === 'CHANNEL_CREATED' && channel) {
+        setServerChannelsCache((prev) => {
+          const existing = prev[serverId] || []
+          if (existing.some((c) => c.id === channel.id)) return prev
+          return { ...prev, [serverId]: [...existing, channel] }
+        })
+
+        if (stompClient && stompClient.connected && !subscribedChannels.current.has(channel.id)) {
+          stompClient.subscribe(`/topic/channel.${channel.id}`, handleIncomingMessage)
+          subscribedChannels.current.add(channel.id)
+        }
+      } else if (event === 'CHANNEL_DELETED' && channelId) {
+        setServerChannelsCache((prev) => {
+          const existing = prev[serverId] || []
+          return { ...prev, [serverId]: existing.filter((c) => c.id !== channelId) }
+        })
+
+        if (useChannelStore.getState().viewingChannelId === channelId) {
+          const cached = useServerStore.getState().serverChannelsCache[serverId] || []
+          const remaining = cached.filter((c) => c.id !== channelId)
+          const nextText = remaining.find((c) => c.type === 'SERVER_TEXT')
+          setViewingChannelId(nextText ? nextText.id : null)
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao processar evento de canal via WS:', err)
+    }
+  }
 
   // Inicialização de Dados e WebSocket
   useEffect(() => {
@@ -93,9 +143,11 @@ export function Dashboard(): React.JSX.Element {
         setDmChannels(chData)
 
         const srvRes = await fetch(`${effectiveApiUrl}/server/@me`, { headers: { Authorization: `Bearer ${effectiveToken}` } })
+        let loadedServers: any[] = []
         if (srvRes.ok) {
           const srvData = await srvRes.json()
-          setServers(Array.isArray(srvData) ? srvData : srvData.data || [])
+          loadedServers = Array.isArray(srvData) ? srvData : srvData.data || []
+          setServers(loadedServers)
         }
 
         const initialMsgs: Record<string, any[]> = {}
@@ -116,7 +168,15 @@ export function Dashboard(): React.JSX.Element {
               }
             })
 
-            // 2. Inscrever no canal pessoal de notificações de amizade e eventos do usuário
+            // 2. Inscrever nos servidores do usuário para receber eventos de canais
+            loadedServers.forEach((srv: any) => {
+              if (!subscribedServers.current.has(srv.id)) {
+                activeStompClient!.subscribe(`/topic/server.${srv.id}.channels`, handleServerChannelEvent)
+                subscribedServers.current.add(srv.id)
+              }
+            })
+
+            // 3. Inscrever no canal pessoal de notificações de amizade e eventos do usuário
             if (userData?.id) {
               activeStompClient!.subscribe(`/topic/user.${userData.id}`, (msg) => {
                 try {
@@ -201,6 +261,11 @@ export function Dashboard(): React.JSX.Element {
                 subscribedChannels.current.add(ch.id)
               }
             })
+
+            if (!subscribedServers.current.has(activeServerId)) {
+              stompClient.subscribe(`/topic/server.${activeServerId}.channels`, handleServerChannelEvent)
+              subscribedServers.current.add(activeServerId)
+            }
           }
         }
 
@@ -220,13 +285,6 @@ export function Dashboard(): React.JSX.Element {
 
     fetchServerData()
   }, [activeServerId, stompClient])
-
-  const handleIncomingMessage = (msg: any) => {
-    const newMsg = JSON.parse(msg.body)
-    const chId = newMsg.channelId
-    if (!chId) return
-    addMessage(chId, newMsg)
-  }
 
   const loadAudioDevices = async () => {
     try {
@@ -366,7 +424,25 @@ export function Dashboard(): React.JSX.Element {
 
   const handleJoinCall = async (channelId: string) => {
     if (inCall && activeVoiceChannelId === channelId) return
-    if (inCall) handleLeaveCall()
+
+    // Se o usuário já estiver em outro canal de voz, desconecta de forma limpa da sala anterior
+    if (livekitRoom) {
+      try {
+        await livekitRoom.disconnect()
+      } catch (err) {
+        console.error('Erro ao desconectar do canal de voz anterior:', err)
+      }
+      setLivekitRoom(null)
+    }
+
+    if (screenTrack) {
+      screenTrack.stop()
+      setScreenTrack(null)
+    }
+
+    setIsSharingScreen(false)
+    setRemoteParticipants([])
+    document.querySelectorAll('audio[id^="track-"]').forEach((el) => el.remove())
 
     try {
       const res = await fetch(`${apiUrl}/calls/${channelId}/token`, {
@@ -408,6 +484,8 @@ export function Dashboard(): React.JSX.Element {
       setRemoteParticipants(Array.from(room.remoteParticipants.values()).map((p) => p.identity))
       setInCall(true)
       setActiveVoiceChannelId(channelId)
+      setViewingChannelId(channelId)
+      setDmVoiceViewMode('voice')
 
       try {
         await room.localParticipant.setMicrophoneEnabled(!isMuted)
@@ -416,12 +494,20 @@ export function Dashboard(): React.JSX.Element {
         console.error(micError)
       }
     } catch (err: any) {
-      alert(err.message)
+      setInCall(false)
+      setActiveVoiceChannelId(null)
+      alert(err.message || 'Erro ao conectar ao canal de voz.')
     }
   }
 
-  const handleLeaveCall = () => {
-    if (livekitRoom) livekitRoom.disconnect()
+  const handleLeaveCall = async () => {
+    if (livekitRoom) {
+      try {
+        await livekitRoom.disconnect()
+      } catch (err) {
+        console.error('Erro ao desconectar da chamada:', err)
+      }
+    }
     if (screenTrack) {
       screenTrack.stop()
       setScreenTrack(null)
@@ -441,12 +527,17 @@ export function Dashboard(): React.JSX.Element {
     document.querySelectorAll('audio[id^="track-"]').forEach((el) => el.remove())
   }
 
-  const toggleMute = async () => {
-    const nextMuted = !isMuted
+  const toggleMute = async (forceState?: boolean) => {
+    const currentMuted = useVoiceStore.getState().isMuted
+    const currentDeafened = useVoiceStore.getState().isDeafened
+    const room = useVoiceStore.getState().livekitRoom
+
+    const nextMuted = typeof forceState === 'boolean' ? forceState : !currentMuted
     setIsMuted(nextMuted)
-    if (!nextMuted && isDeafened) {
+
+    if (!nextMuted && currentDeafened) {
       setIsDeafened(false)
-      document.querySelectorAll('audio[id^="track-"]').forEach((el) => {
+      document.querySelectorAll('audio').forEach((el) => {
         if (el instanceof HTMLAudioElement) {
           const participant = el.getAttribute('data-participant')
           const userVol = participant ? useVoiceStore.getState().getUserVolume(participant) : 100
@@ -454,19 +545,30 @@ export function Dashboard(): React.JSX.Element {
         }
       })
     }
-    if (livekitRoom) await livekitRoom.localParticipant.setMicrophoneEnabled(!nextMuted)
+    if (room?.localParticipant) {
+      try {
+        await room.localParticipant.setMicrophoneEnabled(!nextMuted)
+      } catch (err) {
+        console.error('Erro ao alternar microfone no LiveKit:', err)
+      }
+    }
   }
 
-  const toggleDeafen = () => {
-    const nextDeaf = !isDeafened
+  const toggleDeafen = async () => {
+    const currentDeaf = useVoiceStore.getState().isDeafened
+    const currentMuted = useVoiceStore.getState().isMuted
+
+    const nextDeaf = !currentDeaf
     setIsDeafened(nextDeaf)
+
     if (nextDeaf) {
-      wasMutedRef.current = isMuted
-      if (!isMuted) toggleMute()
+      wasMutedRef.current = currentMuted
+      if (!currentMuted) await toggleMute(true)
     } else {
-      if (isMuted && !wasMutedRef.current) toggleMute()
+      if (currentMuted && !wasMutedRef.current) await toggleMute(false)
     }
-    document.querySelectorAll('audio[id^="track-"]').forEach((el) => {
+
+    document.querySelectorAll('audio').forEach((el) => {
       if (el instanceof HTMLAudioElement) {
         const participant = el.getAttribute('data-participant')
         const userVol = participant ? useVoiceStore.getState().getUserVolume(participant) : 100
@@ -474,6 +576,58 @@ export function Dashboard(): React.JSX.Element {
       }
     })
   }
+
+  // Atalhos de teclado (Locais e Globais via IPC)
+  useEffect(() => {
+    // Sincroniza atalhos com o Electron
+    useKeybindStore.getState().syncWithElectron()
+
+    // Listener de Atalhos Globais (via IPC do Electron)
+    const removeIpc = window.electron?.ipcRenderer?.on('trigger-action', (_, action) => {
+      if (action === 'toggleDeafen') {
+        toggleDeafen()
+      } else if (action === 'toggleMute') {
+        toggleMute()
+      }
+    })
+
+    // Listener de Atalhos Locais (quando a janela está em foco)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement
+      const isInput =
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        activeEl?.getAttribute('contenteditable') === 'true'
+
+      const currentKeybinds = useKeybindStore.getState().keybinds
+
+      // Testa primeiro o atalho composto de Ensurdecer / Mutar Geral
+      if (matchesKeybind(e, currentKeybinds.toggleDeafen)) {
+        const hasModifier = e.ctrlKey || e.altKey || e.metaKey || e.shiftKey
+        if (!isInput || hasModifier) {
+          e.preventDefault()
+          toggleDeafen()
+        }
+      } else if (matchesKeybind(e, currentKeybinds.toggleMute)) {
+        const hasModifier = e.ctrlKey || e.altKey || e.metaKey || e.shiftKey
+        if (!isInput || hasModifier) {
+          e.preventDefault()
+          toggleMute()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      if (typeof removeIpc === 'function') {
+        removeIpc()
+      } else {
+        window.electron?.ipcRenderer?.removeAllListeners('trigger-action')
+      }
+    }
+  }, [])
 
   const handleShareScreen = async () => {
     if (!livekitRoom) return
@@ -550,8 +704,16 @@ export function Dashboard(): React.JSX.Element {
   const serverChannels = activeServerId ? serverChannelsCache[activeServerId] || [] : []
   const allChannels = [...dmChannels, ...serverChannels]
   const viewingChannel = allChannels.find((c) => c.id === viewingChannelId)
-  const isViewingVoice = viewingChannel?.type === 'SERVER_VOICE'
   const isServerChannel = !!serverChannels.find((c) => c.id === viewingChannelId)
+  const isDMVoiceActive = !isServerChannel && inCall && activeVoiceChannelId === viewingChannelId
+  const isViewingVoice =
+    viewingChannel?.type === 'SERVER_VOICE' || (isDMVoiceActive && dmVoiceViewMode === 'voice')
+
+  // Amigo na conversa de DM ativa
+  const dmFriendUser =
+    !isServerChannel && viewingChannel
+      ? viewingChannel?.members?.find((m) => m.id !== currentUser?.id)
+      : undefined
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#1e1f22] overflow-hidden font-sans relative">
@@ -566,20 +728,26 @@ export function Dashboard(): React.JSX.Element {
         {/* 1. Barra Lateral de Servidores */}
         <ServerSidebar />
 
-        {/* 2. Barra de Canais e Usuário */}
+        {/* 2. Barra de Canais */}
         <ChannelSidebar
           onSelectChannel={handleSelectChannel}
           onJoinVoice={(channelId) => {
             handleJoinCall(channelId)
             setViewingChannelId(channelId)
           }}
-          onLeaveCall={handleLeaveCall}
-          onShareScreen={handleShareScreen}
-          onToggleMute={toggleMute}
-          onToggleDeafen={toggleDeafen}
         />
 
-        {/* 3. Área Principal */}
+        {/* 3. Dock Flutuante do Usuário e Voz (Estilo Discord - Sobrepõe Servidores e Canais) */}
+        <div className="absolute bottom-2 left-2 z-30 flex flex-col gap-1.5 pointer-events-none w-[296px]">
+          <div className="pointer-events-auto">
+            <VoiceStatusBar onDisconnect={handleLeaveCall} onShareScreen={handleShareScreen} />
+          </div>
+          <div className="pointer-events-auto">
+            <UserFooter onToggleMute={toggleMute} onToggleDeafen={toggleDeafen} />
+          </div>
+        </div>
+
+        {/* 4. Área Principal */}
         <div className="flex-1 flex bg-[#313338] relative overflow-hidden">
           <div className="flex-1 flex flex-col h-full overflow-hidden">
             {viewingChannelId ? (
@@ -592,6 +760,16 @@ export function Dashboard(): React.JSX.Element {
                   isMuted={isMuted}
                   isDeafened={isDeafened}
                   isSharingScreen={isSharingScreen}
+                  room={livekitRoom}
+                  channelTitle={
+                    isServerChannel
+                      ? viewingChannel?.name
+                      : dmFriendUser?.username
+                        ? `@${dmFriendUser.username}`
+                        : undefined
+                  }
+                  isDM={!isServerChannel}
+                  onOpenChat={isDMVoiceActive ? () => setDmVoiceViewMode('chat') : undefined}
                   onToggleMute={toggleMute}
                   onToggleDeafen={toggleDeafen}
                   onShareScreen={handleShareScreen}
@@ -605,16 +783,29 @@ export function Dashboard(): React.JSX.Element {
                   isServerChannel={isServerChannel}
                   inCall={inCall}
                   onStartCall={() => handleJoinCall(viewingChannelId)}
+                  onToggleViewCall={isDMVoiceActive ? () => setDmVoiceViewMode('voice') : undefined}
+                  onDisconnectCall={handleLeaveCall}
                   onSendMessage={handleSendMessage}
                 />
               )
-            ) : (
+            ) : activeServerId === null ? (
               <Friends apiUrl={apiUrl} token={token} onSelectFriend={handleSelectFriendByUsername} />
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-discord-textMuted gap-2">
+                <h3 className="text-lg font-bold text-white">Nenhum canal selecionado</h3>
+                <p className="text-sm">Selecione um canal na barra lateral para começar a conversar.</p>
+              </div>
             )}
           </div>
 
-          {/* 4. Sidebar de Membros do Servidor (Direita) */}
-          {activeServerId !== null && <ServerMemberSidebar />}
+          {/* 4. Sidebar Direita (Membros do Servidor OU Perfil do Usuário em DM) */}
+          {activeServerId !== null ? (
+            <ServerMemberSidebar />
+          ) : (
+            viewingChannelId && !isServerChannel && dmFriendUser && (
+              <DMUserProfileSidebar user={dmFriendUser} />
+            )
+          )}
         </div>
       </div>
 
@@ -622,6 +813,8 @@ export function Dashboard(): React.JSX.Element {
       <ServerModal />
       <ServerInvitesModal />
       <ServerSettingsModal />
+      <CreateChannelModal />
+      <DeleteChannelModal />
 
       {isPickerOpen && (
         <ScreenPicker

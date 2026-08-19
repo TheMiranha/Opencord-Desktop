@@ -3,6 +3,29 @@ export interface User {
   username: string
   email?: string
   avatarUrl?: string | null
+  bio?: string | null
+  customStatus?: string | null
+  createdAt?: string
+}
+
+export interface MutualServer {
+  id: string
+  name: string
+  iconUrl?: string | null
+}
+
+export interface UserProfile {
+  id: string
+  username: string
+  email?: string
+  avatarUrl?: string | null
+  bio?: string | null
+  customStatus?: string | null
+  createdAt: string
+  updatedAt: string
+  mutualFriendsCount: number
+  mutualServers: MutualServer[]
+  mutualServersCount: number
 }
 
 export interface Server {

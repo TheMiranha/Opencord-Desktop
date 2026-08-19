@@ -31,7 +31,7 @@ export const ServerSidebar: React.FC = () => {
   }
 
   return (
-    <div className="w-[72px] bg-[#1e1f22] flex flex-col items-center py-3 gap-2 flex-shrink-0 overflow-y-auto no-scrollbar z-20">
+    <div className="w-[72px] bg-[#1e1f22] flex flex-col items-center py-3 pb-28 gap-2 flex-shrink-0 overflow-y-auto no-scrollbar z-20">
       {/* Botão Home / DMs */}
       <div
         onClick={handleSelectHome}

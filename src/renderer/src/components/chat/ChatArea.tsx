@@ -11,6 +11,8 @@ interface ChatAreaProps {
   isServerChannel: boolean
   inCall: boolean
   onStartCall: () => void
+  onToggleViewCall?: () => void
+  onDisconnectCall?: () => void
   onSendMessage: (text: string, attachments?: MessageAttachment[]) => void
 }
 
@@ -21,6 +23,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   isServerChannel,
   inCall,
   onStartCall,
+  onToggleViewCall,
+  onDisconnectCall,
   onSendMessage
 }) => {
   let channelName = 'Desconhecido'
@@ -41,6 +45,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         isVoiceChannel={isVoice}
         inCall={inCall}
         onStartCall={onStartCall}
+        onToggleViewCall={onToggleViewCall}
+        onDisconnectCall={onDisconnectCall}
       />
 
       <MessageList

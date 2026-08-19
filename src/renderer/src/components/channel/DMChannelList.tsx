@@ -54,7 +54,7 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({ onSelectChannel })
         Conversas Diretas
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 flex flex-col gap-0.5">
+      <div className="flex-1 overflow-y-auto px-2 pb-28 flex flex-col gap-0.5">
         {filteredChannels.map((ch) => {
           const chFriend = ch.members?.find((m) => m.id !== currentUser?.id)
           const name = chFriend ? chFriend.username : 'Desconhecido'

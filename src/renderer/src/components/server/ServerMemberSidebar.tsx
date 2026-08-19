@@ -69,7 +69,7 @@ export const ServerMemberSidebar: React.FC = () => {
 
   return (
     <div className="w-[240px] bg-[#2b2d31] flex flex-col flex-shrink-0 z-10 select-none border-l border-[#1f2023] overflow-y-auto">
-      <div className="p-4 flex flex-col gap-4">
+      <div className="p-4 pb-8 flex flex-col gap-4">
         {/* Seção Administradores Legados (se houver sem cargo customizado) */}
         {adminLegacyMembers.length > 0 && (
           <div className="flex flex-col gap-1">

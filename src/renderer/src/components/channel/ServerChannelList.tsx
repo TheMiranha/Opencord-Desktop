@@ -3,10 +3,11 @@ import { useServerStore } from '../../stores/useServerStore'
 import { useChannelStore } from '../../stores/useChannelStore'
 import { useVoiceStore } from '../../stores/useVoiceStore'
 import { useAuthStore } from '../../stores/useAuthStore'
+import { useModalStore } from '../../stores/useModalStore'
 import { UserAvatar } from '../common/UserAvatar'
 import { ParticipantVolumePopover } from '../voice/ParticipantVolumePopover'
 
-import { Hash, Volume2, MicOff, VolumeX, Volume1 } from 'lucide-react'
+import { Hash, Volume2, MicOff, VolumeX, Volume1, Plus, Trash2 } from 'lucide-react'
 
 interface ServerChannelListProps {
   onSelectChannel: (channelId: string) => void
@@ -22,6 +23,7 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
   const { viewingChannelId } = useChannelStore()
   const { activeVoiceChannelId, isMuted, remoteParticipants, userVolumes } = useVoiceStore()
   const { currentUser } = useAuthStore()
+  const { openCreateChannelModal, openDeleteChannelModal } = useModalStore()
 
   const serverChannels = activeServerId ? serverChannelsCache[activeServerId] || [] : []
 
@@ -45,31 +47,65 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-2 py-3 flex flex-col gap-0.5">
+    <div className="flex-1 overflow-y-auto px-2 py-3 pb-28 flex flex-col gap-0.5">
       {/* Canais de Texto */}
-      <div className="px-1 pt-2 pb-1 text-[12px] font-bold text-discord-textMuted uppercase tracking-wider flex items-center gap-1">
-        <Hash size={14} />
-        Canais de Texto
+      <div className="px-1 pt-2 pb-1 flex items-center justify-between text-discord-textMuted group/header">
+        <div className="text-[12px] font-bold uppercase tracking-wider flex items-center gap-1">
+          <Hash size={14} />
+          Canais de Texto
+        </div>
+        <button
+          type="button"
+          onClick={() => openCreateChannelModal('SERVER_TEXT')}
+          className="text-discord-textMuted hover:text-white p-0.5 rounded transition-colors cursor-pointer"
+          title="Criar Canal de Texto"
+        >
+          <Plus size={16} />
+        </button>
       </div>
       {textChannels.map((ch) => (
         <div
           key={ch.id}
           onClick={() => onSelectChannel(ch.id)}
-          className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
+          className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors group ${
             viewingChannelId === ch.id
               ? 'bg-[#404249] text-white'
               : 'text-discord-textMuted hover:bg-[#35373c] hover:text-discord-textNormal'
           }`}
         >
-          <Hash size={18} className="text-discord-textMuted flex-shrink-0" />
-          <span className="truncate">{ch.name}</span>
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Hash size={18} className="text-discord-textMuted flex-shrink-0" />
+            <span className="truncate">{ch.name}</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              openDeleteChannelModal({ id: ch.id, name: ch.name, type: ch.type })
+            }}
+            className="opacity-0 group-hover:opacity-100 hover:text-red-400 p-1 rounded transition-all text-discord-textMuted cursor-pointer"
+            title={`Excluir canal #${ch.name}`}
+          >
+            <Trash2 size={14} />
+          </button>
         </div>
       ))}
 
       {/* Canais de Voz */}
-      <div className="px-1 pt-4 pb-1 text-[12px] font-bold text-discord-textMuted uppercase tracking-wider flex items-center gap-1">
-        <Volume2 size={14} />
-        Canais de Voz
+      <div className="px-1 pt-4 pb-1 flex items-center justify-between text-discord-textMuted group/header">
+        <div className="text-[12px] font-bold uppercase tracking-wider flex items-center gap-1">
+          <Volume2 size={14} />
+          Canais de Voz
+        </div>
+        <button
+          type="button"
+          onClick={() => openCreateChannelModal('SERVER_VOICE')}
+          className="text-discord-textMuted hover:text-white p-0.5 rounded transition-colors cursor-pointer"
+          title="Criar Canal de Voz"
+        >
+          <Plus size={16} />
+        </button>
       </div>
       {voiceChannels.map((ch) => {
         const isConnected = activeVoiceChannelId === ch.id
@@ -79,14 +115,31 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
           <div key={ch.id} className="flex flex-col">
             <div
               onClick={() => onJoinVoice(ch.id)}
-              className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
+              className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors group ${
                 isViewing
                   ? 'bg-[#404249] text-white'
                   : 'text-discord-textMuted hover:bg-[#35373c] hover:text-discord-textNormal'
               }`}
             >
-              <Volume2 size={18} className="text-discord-textMuted flex-shrink-0" />
-              <span className="truncate">{ch.name}</span>
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <Volume2
+                  size={18}
+                  className={`flex-shrink-0 ${isConnected ? 'text-[#23a559]' : 'text-discord-textMuted'}`}
+                />
+                <span className="truncate">{ch.name}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openDeleteChannelModal({ id: ch.id, name: ch.name, type: ch.type })
+                }}
+                className="opacity-0 group-hover:opacity-100 hover:text-red-400 p-1 rounded transition-all text-discord-textMuted cursor-pointer"
+                title={`Excluir canal ${ch.name}`}
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
 
             {/* Participantes conectados */}

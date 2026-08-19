@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
-import { X, Volume2, LogOut, User as UserIcon, Camera, Loader2 } from 'lucide-react'
+import { X, Volume2, LogOut, User as UserIcon, Camera, Loader2, Keyboard } from 'lucide-react'
 import { useAuthStore } from '../stores/useAuthStore'
 import { UserAvatar } from '../components/common/UserAvatar'
+import { KeybindSettings } from '../components/settings/KeybindSettings'
 
 export function Settings({
   audioInputs,
@@ -23,11 +24,50 @@ export function Settings({
   onLogout: () => void
 }) {
   const { currentUser, apiUrl, token, setCurrentUser } = useAuthStore()
-  const [activeTab, setActiveTab] = useState<'account' | 'voice'>('account')
+  const [activeTab, setActiveTab] = useState<'account' | 'voice' | 'shortcuts'>('account')
   const [confirmingLogout, setConfirmingLogout] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadFeedback, setUploadFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [bio, setBio] = useState(currentUser?.bio || '')
+  const [isSavingBio, setIsSavingBio] = useState(false)
+  const [bioFeedback, setBioFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (currentUser?.bio !== undefined) {
+      setBio(currentUser.bio || '')
+    }
+  }, [currentUser?.bio])
+
+  const handleSaveBio = async () => {
+    setIsSavingBio(true)
+    setBioFeedback(null)
+
+    try {
+      const res = await fetch(`${apiUrl}/user/me/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ bio: bio.trim() })
+      })
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null)
+        throw new Error(json?.message || 'Falha ao salvar biografia.')
+      }
+
+      const json = await res.json()
+      const updatedUser = json.data || json
+      setCurrentUser(updatedUser)
+      setBioFeedback({ type: 'success', text: 'Biografia atualizada com sucesso!' })
+    } catch (err: any) {
+      setBioFeedback({ type: 'error', text: err.message || 'Erro ao salvar' })
+    } finally {
+      setIsSavingBio(false)
+    }
+  }
 
   // Adiciona o listener para fechar ao apertar ESC
   useEffect(() => {
@@ -111,6 +151,18 @@ export function Settings({
           >
             <Volume2 size={16} />
             Voz e Vídeo
+          </button>
+
+          <button
+            onClick={() => setActiveTab('shortcuts')}
+            className={`w-full max-w-[190px] text-left px-3 py-2 rounded font-medium text-sm flex items-center gap-2 cursor-pointer transition-colors ${
+              activeTab === 'shortcuts'
+                ? 'bg-[#404249] text-white'
+                : 'text-discord-textMuted hover:bg-[#35373c] hover:text-discord-textNormal'
+            }`}
+          >
+            <Keyboard size={16} />
+            Atalhos de Teclado
           </button>
 
           <div className="w-full max-w-[190px] h-[1px] bg-[#35373c] my-2"></div>
@@ -230,6 +282,53 @@ export function Settings({
                       </div>
                     </div>
                   </div>
+
+                  {/* Seção Sobre Mim / Biografia */}
+                  <div className="mt-4 bg-[#2b2d31] rounded-lg p-4 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-discord-textMuted uppercase">Sobre Mim (Biografia)</div>
+                        <p className="text-xs text-discord-textMuted mt-0.5">
+                          Conte um pouco sobre você para as pessoas que conversarem com você em DMs.
+                        </p>
+                      </div>
+                      <span className="text-xs text-discord-textMuted font-mono">
+                        {bio.length}/1000
+                      </span>
+                    </div>
+
+                    <textarea
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
+                      maxLength={1000}
+                      rows={4}
+                      placeholder="Escreva algo sobre você..."
+                      className="w-full bg-[#1e1f22] text-white p-3 rounded-lg text-sm outline-none focus:ring-1 focus:ring-discord-blurple border border-[#111214] resize-none leading-relaxed"
+                    />
+
+                    {bioFeedback && (
+                      <div
+                        className={`p-2.5 rounded text-xs font-medium ${
+                          bioFeedback.type === 'success'
+                            ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                            : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        }`}
+                      >
+                        {bioFeedback.text}
+                      </div>
+                    )}
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSaveBio}
+                        disabled={isSavingBio || bio === (currentUser?.bio || '')}
+                        className="bg-discord-blurple hover:bg-discord-blurpleHover disabled:opacity-50 text-white px-5 py-2 rounded text-xs font-bold transition-colors cursor-pointer shadow-md"
+                      >
+                        {isSavingBio ? 'Salvando...' : 'Salvar Alterações'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -278,6 +377,8 @@ export function Settings({
               </div>
             </div>
           )}
+
+          {activeTab === 'shortcuts' && <KeybindSettings />}
         </div>
 
         {/* Botão ESC / Fechar no canto superior direito do modal */}
