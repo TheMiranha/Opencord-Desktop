@@ -29,18 +29,21 @@ export const MessageList: React.FC<MessageListProps> = ({
         const isMe = msg.senderId === currentUser?.id
 
         let senderName = msg.senderUsername
-        if (!senderName) {
-          if (isMe) {
-            senderName = currentUser?.username || 'Você'
-          } else if (isServerChannel && activeServerId) {
-            const serverMember = serverMembersCache[activeServerId]?.find(
-              (m) => m.userId === msg.senderId
-            )
-            senderName = serverMember?.username
-          } else if (activeChannel?.members) {
-            const friend = activeChannel.members.find((m) => m.id === msg.senderId)
-            senderName = friend?.username
-          }
+        let senderAvatarUrl = msg.senderAvatarUrl
+
+        if (isMe) {
+          senderName = senderName || currentUser?.username || 'Você'
+          senderAvatarUrl = senderAvatarUrl || currentUser?.avatarUrl
+        } else if (isServerChannel && activeServerId) {
+          const serverMember = serverMembersCache[activeServerId]?.find(
+            (m) => m.userId === msg.senderId
+          )
+          senderName = senderName || serverMember?.username
+          senderAvatarUrl = senderAvatarUrl || serverMember?.avatarUrl
+        } else if (activeChannel?.members) {
+          const friend = activeChannel.members.find((m) => m.id === msg.senderId)
+          senderName = senderName || friend?.username
+          senderAvatarUrl = senderAvatarUrl || friend?.avatarUrl
         }
 
         if (!senderName) {
@@ -53,6 +56,7 @@ export const MessageList: React.FC<MessageListProps> = ({
             message={msg}
             currentUser={currentUser}
             senderName={senderName}
+            senderAvatarUrl={senderAvatarUrl}
           />
         )
       })}

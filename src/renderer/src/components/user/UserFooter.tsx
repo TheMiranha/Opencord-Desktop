@@ -4,6 +4,7 @@ import { useVoiceStore } from '../../stores/useVoiceStore'
 import { useModalStore } from '../../stores/useModalStore'
 
 import { Mic, MicOff, Headphones, Settings } from 'lucide-react'
+import { UserAvatar } from '../common/UserAvatar'
 
 interface UserFooterProps {
   onToggleMute: () => void
@@ -20,11 +21,13 @@ export const UserFooter: React.FC<UserFooterProps> = ({
 
   return (
     <div className="h-[54px] bg-[#232428] mt-auto flex items-center px-2 justify-between flex-shrink-0">
-      <div className="flex items-center gap-1.5 min-w-0">
-        <div className="w-8 h-8 rounded-full bg-[#1e1f22] flex items-center justify-center font-bold relative flex-shrink-0 text-white">
-          {currentUser?.username?.charAt(0).toUpperCase()}
-          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#232428] rounded-full"></div>
-        </div>
+      <div className="flex items-center gap-2 min-w-0">
+        <UserAvatar
+          username={currentUser?.username}
+          avatarUrl={currentUser?.avatarUrl}
+          size="sm"
+          status="online"
+        />
         <div className="flex flex-col truncate">
           <span className="text-xs font-bold text-white truncate">{currentUser?.username}</span>
           <span className="text-[10px] text-discord-textMuted truncate">Online</span>

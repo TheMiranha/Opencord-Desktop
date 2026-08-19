@@ -2,6 +2,7 @@ import React from 'react'
 import { Crown, Shield } from 'lucide-react'
 import { useServerStore } from '../../stores/useServerStore'
 import { ServerMember } from '../../types'
+import { UserAvatar } from '../common/UserAvatar'
 
 export const ServerMemberSidebar: React.FC = () => {
   const { activeServerId, serverMembersCache } = useServerStore()
@@ -28,12 +29,12 @@ export const ServerMemberSidebar: React.FC = () => {
                 key={member.id || member.userId}
                 className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-[#35373c] transition-colors cursor-pointer group"
               >
-                <div className="relative flex-shrink-0">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-yellow-500 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-                    {member.username.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#2b2d31] rounded-full"></div>
-                </div>
+                <UserAvatar
+                  username={member.username}
+                  avatarUrl={member.avatarUrl}
+                  size="sm"
+                  status="online"
+                />
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <span className="text-sm font-medium text-white truncate group-hover:text-white">
                     {member.username}
@@ -63,12 +64,12 @@ export const ServerMemberSidebar: React.FC = () => {
                 key={member.id || member.userId}
                 className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-[#35373c] transition-colors cursor-pointer group"
               >
-                <div className="relative flex-shrink-0">
-                  <div className="w-8 h-8 rounded-full bg-discord-blurple flex items-center justify-center text-white font-bold text-sm shadow-sm">
-                    {member.username.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#2b2d31] rounded-full"></div>
-                </div>
+                <UserAvatar
+                  username={member.username}
+                  avatarUrl={member.avatarUrl}
+                  size="sm"
+                  status="online"
+                />
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <span className="text-sm font-medium text-discord-textNormal truncate group-hover:text-white">
                     {member.username}

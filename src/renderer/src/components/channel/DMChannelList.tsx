@@ -3,6 +3,7 @@ import { useChannelStore } from '../../stores/useChannelStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 
 import { Users } from 'lucide-react'
+import { UserAvatar } from '../common/UserAvatar'
 
 interface DMChannelListProps {
   onSelectChannel: (channelId: string) => void
@@ -69,10 +70,13 @@ export const DMChannelList: React.FC<DMChannelListProps> = ({ onSelectChannel })
                   : 'text-discord-textMuted hover:bg-[#35373c] hover:text-discord-textNormal'
               }`}
             >
-              <div className="w-8 h-8 rounded-full bg-discord-blurple flex items-center justify-center text-white font-bold flex-shrink-0">
-                {name.charAt(0).toUpperCase()}
-              </div>
-              <span className="truncate">{name}</span>
+              <UserAvatar
+                username={name}
+                avatarUrl={chFriend?.avatarUrl}
+                size="sm"
+                status="online"
+              />
+              <span className="truncate font-medium text-sm">{name}</span>
             </div>
           )
         })}

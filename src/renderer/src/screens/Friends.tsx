@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Users, UserPlus, MessageSquare, Check, Loader2 } from 'lucide-react'
 import { useChannelStore } from '../stores/useChannelStore'
+import { UserAvatar } from '../components/common/UserAvatar'
 
 export function Friends({ 
   apiUrl, 
@@ -204,9 +205,11 @@ export function Friends({
                     className="flex items-center justify-between p-3 rounded-lg bg-[#2b2d31] border border-[#3f4147]/30 hover:border-[#3f4147] transition-all"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-discord-blurple flex items-center justify-center text-white font-bold text-base shadow-sm">
-                        {req.username.charAt(0).toUpperCase()}
-                      </div>
+                      <UserAvatar
+                        username={req.username}
+                        avatarUrl={req.avatarUrl}
+                        size="md"
+                      />
                       <div>
                         <div className="text-white font-semibold text-sm">{req.username}</div>
                         <div className="text-xs text-discord-textMuted">Solicitação de amizade recebida</div>
@@ -255,10 +258,12 @@ export function Friends({
                     className="flex items-center justify-between p-2.5 rounded-lg hover:bg-[#35373c] transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-discord-blurple flex items-center justify-center text-white font-bold relative shadow-sm">
-                        {friend.username.charAt(0).toUpperCase()}
-                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#313338] rounded-full"></div>
-                      </div>
+                      <UserAvatar
+                        username={friend.username}
+                        avatarUrl={friend.avatarUrl}
+                        size="md"
+                        status="online"
+                      />
                       <div className="flex flex-col">
                         <span className="text-white font-medium text-sm group-hover:underline">
                           {friend.username}

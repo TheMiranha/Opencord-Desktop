@@ -1,15 +1,18 @@
 import React from 'react'
 import { Message, User } from '../../types'
+import { UserAvatar } from '../common/UserAvatar'
 
 interface MessageItemProps {
   message: Message
   currentUser: User | null
   senderName: string
+  senderAvatarUrl?: string | null
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({
   message,
-  senderName
+  senderName,
+  senderAvatarUrl
 }) => {
   const timeFormatted = new Date(message.createdAt || Date.now()).toLocaleTimeString([], {
     hour: '2-digit',
@@ -18,9 +21,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   return (
     <div className="flex gap-4 hover:bg-[#2e3035] p-1 -mx-1 rounded group">
-      <div className="w-10 h-10 rounded-full bg-discord-blurple flex items-center justify-center text-white font-bold flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-80 transition-opacity">
-        {senderName.charAt(0).toUpperCase()}
-      </div>
+      <UserAvatar
+        username={senderName}
+        avatarUrl={senderAvatarUrl || message.senderAvatarUrl}
+        size="md"
+        className="mt-0.5 cursor-pointer hover:opacity-90 transition-opacity"
+      />
       <div className="flex flex-col">
         <div className="flex items-baseline gap-2">
           <span className="text-white font-medium hover:underline cursor-pointer">{senderName}</span>

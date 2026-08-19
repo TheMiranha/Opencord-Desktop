@@ -2,6 +2,7 @@ export interface User {
   id: string
   username: string
   email?: string
+  avatarUrl?: string | null
 }
 
 export interface Server {
@@ -25,6 +26,7 @@ export interface Message {
   channelId: string
   senderId: string
   senderUsername?: string
+  senderAvatarUrl?: string | null
   content: string
   createdAt?: string
 }
@@ -41,5 +43,6 @@ export interface ServerMember {
   id: string
   userId: string
   username: string
+  avatarUrl?: string | null
   role: 'ADMIN' | 'MEMBER' | string
 }
