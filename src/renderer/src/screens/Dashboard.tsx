@@ -21,6 +21,8 @@ import { ScreenPicker } from './ScreenPicker'
 import { ServerModal } from '../components/modals/ServerModal'
 import { ServerInvitesModal } from '../components/modals/ServerInvitesModal'
 import { ServerMemberSidebar } from '../components/server/ServerMemberSidebar'
+import { ServerSettingsModal } from '../components/server/ServerSettingsModal'
+import { MessageAttachment } from '../types'
 
 export function Dashboard(): React.JSX.Element {
   const navigate = useNavigate()
@@ -296,11 +298,20 @@ export function Dashboard(): React.JSX.Element {
     if (targetChannel) handleSelectChannel(targetChannel.id)
   }
 
-  const handleSendMessage = (content: string) => {
-    if (!content || !viewingChannelId || !stompClient) return
+  const handleSendMessage = (content: string, attachments?: MessageAttachment[]) => {
+    const validAttachments = (attachments || []).filter(
+      (a) => Boolean(a && a.url && typeof a.url === 'string' && a.url.trim() !== '')
+    )
+    if (!content.trim() && validAttachments.length === 0) return
+    if (!viewingChannelId || !stompClient) return
+
     stompClient.publish({
       destination: '/app/chat.send',
-      body: JSON.stringify({ channelId: viewingChannelId, content })
+      body: JSON.stringify({
+        channelId: viewingChannelId,
+        content: content.trim(),
+        attachments: validAttachments.length > 0 ? validAttachments : null
+      })
     })
   }
 
@@ -596,9 +607,10 @@ export function Dashboard(): React.JSX.Element {
         </div>
       </div>
 
-      {/* Modais */}
+      {/* Modais Globais */}
       <ServerModal />
       <ServerInvitesModal />
+      <ServerSettingsModal />
 
       {isPickerOpen && (
         <ScreenPicker

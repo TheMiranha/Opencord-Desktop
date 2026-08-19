@@ -3,6 +3,7 @@ import { useServerStore } from '../../stores/useServerStore'
 import { useChannelStore } from '../../stores/useChannelStore'
 import { useVoiceStore } from '../../stores/useVoiceStore'
 import { useAuthStore } from '../../stores/useAuthStore'
+import { UserAvatar } from '../common/UserAvatar'
 
 import { Hash, Volume2, MicOff } from 'lucide-react'
 
@@ -15,7 +16,7 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
   onSelectChannel,
   onJoinVoice
 }) => {
-  const { activeServerId, serverChannelsCache } = useServerStore()
+  const { activeServerId, serverChannelsCache, serverMembersCache } = useServerStore()
   const { viewingChannelId } = useChannelStore()
   const { activeVoiceChannelId, isMuted, remoteParticipants } = useVoiceStore()
   const { currentUser } = useAuthStore()
@@ -24,6 +25,16 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
 
   const textChannels = serverChannels.filter((c) => c.type === 'SERVER_TEXT')
   const voiceChannels = serverChannels.filter((c) => c.type === 'SERVER_VOICE')
+
+  const getParticipantAvatar = (identity: string): string | null | undefined => {
+    if (activeServerId && serverMembersCache[activeServerId]) {
+      const member = serverMembersCache[activeServerId].find(
+        (m) => m.username === identity || m.id === identity
+      )
+      if (member?.avatarUrl) return member.avatarUrl
+    }
+    return null
+  }
 
   return (
     <div className="flex-1 overflow-y-auto px-2 py-3 flex flex-col gap-0.5">
@@ -74,9 +85,12 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
             {isConnected && (
               <div className="flex flex-col gap-[2px] mt-1 pl-7 pr-2 mb-2">
                 <div className="flex items-center gap-2 px-2 py-1 rounded hover:bg-[#35373c] cursor-pointer group">
-                  <div className="w-6 h-6 rounded-full bg-discord-blurple flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-                    {currentUser?.username?.charAt(0).toUpperCase()}
-                  </div>
+                  <UserAvatar
+                    username={currentUser?.username || 'Você'}
+                    avatarUrl={currentUser?.avatarUrl}
+                    size="xs"
+                    status="online"
+                  />
                   <span className="text-discord-textMuted text-[13px] font-medium truncate group-hover:text-discord-textNormal">
                     {currentUser?.username}
                   </span>
@@ -90,9 +104,12 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
                     key={identity}
                     className="flex items-center gap-2 px-2 py-1 rounded hover:bg-[#35373c] cursor-pointer group"
                   >
-                    <div className="w-6 h-6 rounded-full bg-[#1a6335] flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-                      {identity.charAt(0).toUpperCase()}
-                    </div>
+                    <UserAvatar
+                      username={identity}
+                      avatarUrl={getParticipantAvatar(identity)}
+                      size="xs"
+                      status="online"
+                    />
                     <span className="text-discord-textMuted text-[13px] font-medium truncate group-hover:text-discord-textNormal">
                       {identity}
                     </span>

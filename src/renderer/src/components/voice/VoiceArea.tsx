@@ -1,6 +1,9 @@
 import React from 'react'
 import { VoiceControls } from './VoiceControls'
 import { User } from '../../types'
+import { UserAvatar } from '../common/UserAvatar'
+import { useServerStore } from '../../stores/useServerStore'
+import { useChannelStore } from '../../stores/useChannelStore'
 
 interface VoiceAreaProps {
   currentUser: User | null
@@ -29,6 +32,23 @@ export const VoiceArea: React.FC<VoiceAreaProps> = ({
   onShareScreen,
   onLeaveCall
 }) => {
+  const { activeServerId, serverMembersCache } = useServerStore()
+  const { dmChannels } = useChannelStore()
+
+  const getParticipantAvatar = (identity: string): string | null | undefined => {
+    if (activeServerId && serverMembersCache[activeServerId]) {
+      const member = serverMembersCache[activeServerId].find(
+        (m) => m.username === identity || m.id === identity
+      )
+      if (member?.avatarUrl) return member.avatarUrl
+    }
+    for (const ch of dmChannels) {
+      const member = ch.members?.find((m) => m.username === identity || m.id === identity)
+      if (member?.avatarUrl) return member.avatarUrl
+    }
+    return null
+  }
+
   return (
     <div className="flex-1 bg-black p-6 relative flex flex-col items-center justify-center overflow-hidden z-0">
       <div className="flex flex-wrap justify-center content-center gap-4 w-full h-full max-w-6xl">
@@ -36,9 +56,12 @@ export const VoiceArea: React.FC<VoiceAreaProps> = ({
           id="tile-local"
           className="relative bg-[#2b2d31] rounded-lg overflow-hidden flex-1 aspect-video min-w-[300px] max-w-[800px] flex items-center justify-center shadow-lg"
         >
-          <div className="w-20 h-20 rounded-full bg-discord-blurple flex items-center justify-center text-white text-3xl font-bold shadow-lg z-0">
-            {currentUser?.username?.charAt(0).toUpperCase()}
-          </div>
+          <UserAvatar
+            username={currentUser?.username || 'Você'}
+            avatarUrl={currentUser?.avatarUrl}
+            size="3xl"
+            className="z-0"
+          />
           <div className="absolute bottom-3 left-3 bg-black/60 px-2 py-1 rounded text-xs text-white z-20 font-medium">
             Você
           </div>
@@ -50,9 +73,12 @@ export const VoiceArea: React.FC<VoiceAreaProps> = ({
             id={`tile-${identity}`}
             className="relative bg-[#2b2d31] rounded-lg overflow-hidden flex-1 aspect-video min-w-[300px] max-w-[800px] flex items-center justify-center shadow-lg"
           >
-            <div className="w-20 h-20 rounded-full bg-[#1a6335] flex items-center justify-center text-white text-3xl font-bold shadow-lg z-0">
-              {identity.charAt(0).toUpperCase()}
-            </div>
+            <UserAvatar
+              username={identity}
+              avatarUrl={getParticipantAvatar(identity)}
+              size="3xl"
+              className="z-0"
+            />
             <div className="absolute bottom-3 left-3 bg-black/60 px-2 py-1 rounded text-xs text-white z-20 font-medium">
               {identity}
             </div>

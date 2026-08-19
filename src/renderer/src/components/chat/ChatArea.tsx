@@ -2,7 +2,7 @@ import React from 'react'
 import { ChannelHeader } from './ChannelHeader'
 import { MessageList } from './MessageList'
 import { MessageInput } from './MessageInput'
-import { Channel, Message, User } from '../../types'
+import { Channel, Message, User, MessageAttachment } from '../../types'
 
 interface ChatAreaProps {
   viewingChannel: Channel | undefined
@@ -11,7 +11,7 @@ interface ChatAreaProps {
   isServerChannel: boolean
   inCall: boolean
   onStartCall: () => void
-  onSendMessage: (text: string) => void
+  onSendMessage: (text: string, attachments?: MessageAttachment[]) => void
 }
 
 export const ChatArea: React.FC<ChatAreaProps> = ({

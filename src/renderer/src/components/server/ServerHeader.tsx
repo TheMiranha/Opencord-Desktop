@@ -2,11 +2,11 @@ import React, { useState } from 'react'
 import { useServerStore } from '../../stores/useServerStore'
 import { useModalStore } from '../../stores/useModalStore'
 
-import { ChevronDown, UserPlus } from 'lucide-react'
+import { ChevronDown, UserPlus, Settings } from 'lucide-react'
 
 export const ServerHeader: React.FC = () => {
   const { servers, activeServerId } = useServerStore()
-  const { setIsInviteModalOpen } = useModalStore()
+  const { setIsInviteModalOpen, setIsServerSettingsOpen } = useModalStore()
   const [isServerMenuOpen, setIsServerMenuOpen] = useState(false)
 
   const currentServer = servers.find((s) => s.id === activeServerId)
@@ -41,6 +41,18 @@ export const ServerHeader: React.FC = () => {
             >
               <span>Convidar Pessoas</span>
               <UserPlus size={18} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsServerMenuOpen(false)
+                setIsServerSettingsOpen(true)
+              }}
+              className="flex items-center justify-between px-2.5 py-2 rounded text-sm font-medium text-discord-textNormal hover:bg-[#35373c] hover:text-white transition-colors cursor-pointer group"
+            >
+              <span>Configurações do Servidor</span>
+              <Settings size={18} className="text-discord-textMuted group-hover:text-white" />
             </button>
           </div>
         </>

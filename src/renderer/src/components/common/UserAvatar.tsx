@@ -3,7 +3,7 @@ import { useState } from 'react'
 interface UserAvatarProps {
   username?: string
   avatarUrl?: string | null
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl'
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl'
   status?: 'online' | 'offline' | 'idle' | 'dnd'
   className?: string
 }
@@ -14,7 +14,8 @@ const sizeMap = {
   md: { box: 'w-10 h-10 text-base', indicator: 'w-3 h-3' },
   lg: { box: 'w-12 h-12 text-lg', indicator: 'w-3.5 h-3.5' },
   xl: { box: 'w-16 h-16 text-2xl', indicator: 'w-4 h-4' },
-  '2xl': { box: 'w-20 h-20 text-3xl', indicator: 'w-5 h-5' }
+  '2xl': { box: 'w-20 h-20 text-3xl', indicator: 'w-5 h-5' },
+  '3xl': { box: 'w-24 h-24 text-4xl', indicator: 'w-6 h-6' }
 }
 
 export function UserAvatar({
