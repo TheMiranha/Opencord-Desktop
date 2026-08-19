@@ -1,11 +1,12 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useServerStore } from '../../stores/useServerStore'
 import { useChannelStore } from '../../stores/useChannelStore'
 import { useVoiceStore } from '../../stores/useVoiceStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { UserAvatar } from '../common/UserAvatar'
+import { ParticipantVolumePopover } from '../voice/ParticipantVolumePopover'
 
-import { Hash, Volume2, MicOff } from 'lucide-react'
+import { Hash, Volume2, MicOff, VolumeX, Volume1 } from 'lucide-react'
 
 interface ServerChannelListProps {
   onSelectChannel: (channelId: string) => void
@@ -16,9 +17,10 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
   onSelectChannel,
   onJoinVoice
 }) => {
+  const [volumePopoverIdentity, setVolumePopoverIdentity] = useState<string | null>(null)
   const { activeServerId, serverChannelsCache, serverMembersCache } = useServerStore()
   const { viewingChannelId } = useChannelStore()
-  const { activeVoiceChannelId, isMuted, remoteParticipants } = useVoiceStore()
+  const { activeVoiceChannelId, isMuted, remoteParticipants, userVolumes } = useVoiceStore()
   const { currentUser } = useAuthStore()
 
   const serverChannels = activeServerId ? serverChannelsCache[activeServerId] || [] : []
@@ -34,6 +36,12 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
       if (member?.avatarUrl) return member.avatarUrl
     }
     return null
+  }
+
+  const getVolumeIcon = (vol: number) => {
+    if (vol === 0) return <VolumeX size={13} className="text-discord-danger" />
+    if (vol < 50) return <Volume1 size={13} className="text-amber-400" />
+    return <Volume2 size={13} className="text-discord-textMuted hover:text-white" />
   }
 
   return (
@@ -99,22 +107,56 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
                   )}
                 </div>
 
-                {remoteParticipants.map((identity) => (
-                  <div
-                    key={identity}
-                    className="flex items-center gap-2 px-2 py-1 rounded hover:bg-[#35373c] cursor-pointer group"
-                  >
-                    <UserAvatar
-                      username={identity}
-                      avatarUrl={getParticipantAvatar(identity)}
-                      size="xs"
-                      status="online"
-                    />
-                    <span className="text-discord-textMuted text-[13px] font-medium truncate group-hover:text-discord-textNormal">
-                      {identity}
-                    </span>
-                  </div>
-                ))}
+                {remoteParticipants.map((identity) => {
+                  const userVol = typeof userVolumes[identity] === 'number' ? userVolumes[identity] : 100
+                  const isPopoverOpen = volumePopoverIdentity === identity
+
+                  return (
+                    <div
+                      key={identity}
+                      className="relative flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-[#35373c] cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <UserAvatar
+                          username={identity}
+                          avatarUrl={getParticipantAvatar(identity)}
+                          size="xs"
+                          status="online"
+                        />
+                        <span className="text-discord-textMuted text-[13px] font-medium truncate group-hover:text-discord-textNormal">
+                          {identity}
+                        </span>
+                      </div>
+
+                      {/* Botão de Ajustar Volume */}
+                      <div className="relative flex items-center">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setVolumePopoverIdentity(isPopoverOpen ? null : identity)
+                          }}
+                          className={`p-1 rounded transition-colors cursor-pointer ${
+                            userVol !== 100 || isPopoverOpen
+                              ? 'text-white bg-[#18191c]'
+                              : 'text-discord-textMuted opacity-0 group-hover:opacity-100 hover:text-white'
+                          }`}
+                          title={`Ajustar volume de ${identity} (${userVol}%)`}
+                        >
+                          {getVolumeIcon(userVol)}
+                        </button>
+
+                        {isPopoverOpen && (
+                          <ParticipantVolumePopover
+                            identity={identity}
+                            onClose={() => setVolumePopoverIdentity(null)}
+                            className="top-7 right-0"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

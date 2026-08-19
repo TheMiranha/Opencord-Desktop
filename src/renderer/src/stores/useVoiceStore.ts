@@ -1,6 +1,17 @@
 import { create } from 'zustand'
 import { Room, LocalVideoTrack } from 'livekit-client'
 
+const USER_VOLUMES_KEY = 'OPENCORD_USER_VOLUMES'
+
+const loadInitialVolumes = (): Record<string, number> => {
+  try {
+    const raw = localStorage.getItem(USER_VOLUMES_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
 interface VoiceState {
   livekitRoom: Room | null
   inCall: boolean
@@ -15,6 +26,7 @@ interface VoiceState {
   selectedOutput: string
   screenTrack: LocalVideoTrack | null
   screenSources: any[]
+  userVolumes: Record<string, number>
   setLivekitRoom: (room: Room | null) => void
   setInCall: (inCall: boolean) => void
   setActiveVoiceChannelId: (id: string | null) => void
@@ -30,9 +42,11 @@ interface VoiceState {
   setSelectedOutput: (output: string) => void
   setScreenTrack: (track: LocalVideoTrack | null) => void
   setScreenSources: (sources: any[]) => void
+  setUserVolume: (identity: string, volume: number) => void
+  getUserVolume: (identity: string) => number
 }
 
-export const useVoiceStore = create<VoiceState>((set) => ({
+export const useVoiceStore = create<VoiceState>((set, get) => ({
   livekitRoom: null,
   inCall: false,
   activeVoiceChannelId: null,
@@ -46,6 +60,7 @@ export const useVoiceStore = create<VoiceState>((set) => ({
   selectedOutput: '',
   screenTrack: null,
   screenSources: [],
+  userVolumes: loadInitialVolumes(),
   setLivekitRoom: (livekitRoom) => set({ livekitRoom }),
   setInCall: (inCall) => set({ inCall }),
   setActiveVoiceChannelId: (activeVoiceChannelId) => set({ activeVoiceChannelId }),
@@ -64,5 +79,29 @@ export const useVoiceStore = create<VoiceState>((set) => ({
   setSelectedInput: (selectedInput) => set({ selectedInput }),
   setSelectedOutput: (selectedOutput) => set({ selectedOutput }),
   setScreenTrack: (screenTrack) => set({ screenTrack }),
-  setScreenSources: (screenSources) => set({ screenSources })
+  setScreenSources: (screenSources) => set({ screenSources }),
+  setUserVolume: (identity: string, volume: number) => {
+    const clamped = Math.max(0, Math.min(200, volume))
+    const updated = { ...get().userVolumes, [identity]: clamped }
+    try {
+      localStorage.setItem(USER_VOLUMES_KEY, JSON.stringify(updated))
+    } catch (e) {
+      console.error('Erro ao salvar volume do usuário:', e)
+    }
+    set({ userVolumes: updated })
+
+    // Aplica o volume em todos os elementos de áudio desse participante
+    const audioElements = document.querySelectorAll(`audio[data-participant="${identity}"]`)
+    audioElements.forEach((el) => {
+      if (el instanceof HTMLAudioElement) {
+        // HTMLAudioElement suporta 0.0 a 1.0 (clamped em 100%)
+        el.volume = Math.max(0, Math.min(1, clamped / 100))
+        el.muted = get().isDeafened || clamped === 0
+      }
+    })
+  },
+  getUserVolume: (identity: string) => {
+    const vol = get().userVolumes[identity]
+    return typeof vol === 'number' ? vol : 100
+  }
 }))

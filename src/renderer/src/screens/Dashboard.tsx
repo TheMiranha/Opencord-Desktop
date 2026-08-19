@@ -336,12 +336,15 @@ export function Dashboard(): React.JSX.Element {
 
     if (track.kind === 'audio') {
       el.style.display = 'none'
+      el.setAttribute('data-participant', participantIdentity)
       document.body.appendChild(el)
       if (selectedOutput && 'setSinkId' in el) {
         ;(el as any).setSinkId(selectedOutput).catch((err: any) => console.error('Erro sinkId:', err))
       }
       if (el instanceof HTMLAudioElement) {
-        el.muted = isDeafened
+        const userVol = useVoiceStore.getState().getUserVolume(participantIdentity)
+        el.volume = Math.max(0, Math.min(1, userVol / 100))
+        el.muted = isDeafened || userVol === 0
         el.play().catch((e) => console.error('Autoplay bloqueado:', e))
       }
       return
@@ -444,7 +447,11 @@ export function Dashboard(): React.JSX.Element {
     if (!nextMuted && isDeafened) {
       setIsDeafened(false)
       document.querySelectorAll('audio[id^="track-"]').forEach((el) => {
-        if (el instanceof HTMLAudioElement) el.muted = false
+        if (el instanceof HTMLAudioElement) {
+          const participant = el.getAttribute('data-participant')
+          const userVol = participant ? useVoiceStore.getState().getUserVolume(participant) : 100
+          el.muted = userVol === 0
+        }
       })
     }
     if (livekitRoom) await livekitRoom.localParticipant.setMicrophoneEnabled(!nextMuted)
@@ -460,7 +467,11 @@ export function Dashboard(): React.JSX.Element {
       if (isMuted && !wasMutedRef.current) toggleMute()
     }
     document.querySelectorAll('audio[id^="track-"]').forEach((el) => {
-      if (el instanceof HTMLAudioElement) el.muted = nextDeaf
+      if (el instanceof HTMLAudioElement) {
+        const participant = el.getAttribute('data-participant')
+        const userVol = participant ? useVoiceStore.getState().getUserVolume(participant) : 100
+        el.muted = nextDeaf || userVol === 0
+      }
     })
   }
 
