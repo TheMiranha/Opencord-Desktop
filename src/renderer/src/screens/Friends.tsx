@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { Users, UserPlus, MessageSquare, Check, Loader2 } from 'lucide-react'
+import { useChannelStore } from '../stores/useChannelStore'
 
 export function Friends({ 
   apiUrl, 
@@ -14,6 +16,8 @@ export function Friends({
   const [pending, setPending] = useState<any[]>([])
   const [addUsername, setAddUsername] = useState('')
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [isAccepting, setIsAccepting] = useState<string | null>(null)
+  const { setDmChannels } = useChannelStore()
 
   const loadData = async () => {
     try {
@@ -37,9 +41,33 @@ export function Friends({
     }
   }
 
+  const syncDMs = async () => {
+    try {
+      const res = await fetch(`${apiUrl}/channels/@me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const json = await res.json()
+        setDmChannels(json.data || [])
+      }
+    } catch (err) {
+      console.error('Erro ao sincronizar DMs:', err)
+    }
+  }
+
   useEffect(() => {
     loadData()
-  }, [])
+
+    const handleUpdate = () => {
+      loadData()
+      syncDMs()
+    }
+
+    window.addEventListener('friendship-updated', handleUpdate)
+    return () => {
+      window.removeEventListener('friendship-updated', handleUpdate)
+    }
+  }, [token])
 
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,8 +90,29 @@ export function Friends({
       setFeedback({ type: 'success', text: `Solicitação enviada para ${addUsername} com sucesso!` })
       setAddUsername('')
       loadData()
+      syncDMs()
     } catch (err: any) {
       setFeedback({ type: 'error', text: err.message })
+    }
+  }
+
+  const handleAcceptFriendship = async (targetUsername: string) => {
+    setIsAccepting(targetUsername)
+    try {
+      const res = await fetch(`${apiUrl}/friendship/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ addresseeUsername: targetUsername })
+      })
+      if (res.ok) {
+        await loadData()
+        await syncDMs()
+        setTab('all')
+      }
+    } catch (err) {
+      console.error('Erro ao aceitar amizade:', err)
+    } finally {
+      setIsAccepting(null)
     }
   }
 
@@ -71,9 +120,7 @@ export function Friends({
     <div className="flex-1 flex flex-col bg-[#313338] text-discord-textNormal h-full">
       <div className="h-12 border-b border-[#1e1f22] flex items-center px-4 gap-4 shadow-sm flex-shrink-0">
         <div className="flex items-center gap-2 font-semibold text-white border-r border-[#3f4147] pr-4">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="text-discord-textMuted">
-            <path d="M19 2H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2ZM7 11.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5ZM17 17H7v-.73C7 14.5 10.33 14 12 14s5 .5 5 2.27V17Z" />
-          </svg>
+          <Users size={20} className="text-discord-textMuted" />
           Amigos
         </div>
 
@@ -103,8 +150,9 @@ export function Friends({
           </button>
           <button 
             onClick={() => setTab('add')} 
-            className={`px-2 py-1 rounded bg-[#248046] text-white hover:bg-[#1a6335] transition-colors`}
+            className={`px-2 py-1 rounded bg-[#248046] text-white hover:bg-[#1a6335] transition-colors flex items-center gap-1.5`}
           >
+            <UserPlus size={15} />
             Adicionar Amigo
           </button>
         </div>
@@ -150,30 +198,37 @@ export function Friends({
               <p className="text-discord-textMuted text-sm">Nenhuma solicitação pendente no momento.</p>
             ) : (
               <div className="flex flex-col gap-2">
-                {pending.map(req => (
-                  <div key={req.id} className="flex items-center justify-between p-3 rounded-lg bg-[#2b2d31] border-t border-[#3f4147]/20">
+                {pending.map((req) => (
+                  <div
+                    key={req.id || req.userId}
+                    className="flex items-center justify-between p-3 rounded-lg bg-[#2b2d31] border border-[#3f4147]/30 hover:border-[#3f4147] transition-all"
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-discord-blurple flex items-center justify-center text-white font-bold">
+                      <div className="w-10 h-10 rounded-full bg-discord-blurple flex items-center justify-center text-white font-bold text-base shadow-sm">
                         {req.username.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <div className="text-white font-medium">{req.username}</div>
+                        <div className="text-white font-semibold text-sm">{req.username}</div>
                         <div className="text-xs text-discord-textMuted">Solicitação de amizade recebida</div>
                       </div>
                     </div>
-                    
-                    <button 
-                      onClick={async () => {
-                        await fetch(`${apiUrl}/friendship/request`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                          body: JSON.stringify({ addresseeUsername: req.username })
-                        })
-                        loadData()
-                      }}
-                      className="bg-[#248046] hover:bg-[#1a6335] text-white px-4 py-1.5 rounded text-sm font-medium transition-colors"
+
+                    <button
+                      disabled={isAccepting === req.username}
+                      onClick={() => handleAcceptFriendship(req.username)}
+                      className="bg-[#248046] hover:bg-[#1a6335] disabled:opacity-50 text-white px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
-                      Aceitar
+                      {isAccepting === req.username ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          Aceitando...
+                        </>
+                      ) : (
+                        <>
+                          <Check size={14} />
+                          Aceitar
+                        </>
+                      )}
                     </button>
                   </div>
                 ))}
@@ -188,22 +243,40 @@ export function Friends({
               {tab === 'online' ? 'Amigos Online' : 'Todos os Amigos'} — {friends.length}
             </h3>
             {friends.length === 0 ? (
-              <p className="text-discord-textMuted text-sm">Nenhum amigo adicionado ainda. Clique em "Adicionar Amigo" acima!</p>
+              <p className="text-discord-textMuted text-sm">
+                Nenhum amigo adicionado ainda. Clique em "Adicionar Amigo" acima!
+              </p>
             ) : (
               <div className="flex flex-col gap-1">
-                {friends.map(friend => (
-                  <div 
-                    key={friend.id} 
+                {friends.map((friend) => (
+                  <div
+                    key={friend.id || friend.userId}
                     onClick={() => onSelectFriend(friend.username)}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-[#35373c] transition-colors cursor-pointer group"
+                    className="flex items-center justify-between p-2.5 rounded-lg hover:bg-[#35373c] transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-discord-blurple flex items-center justify-center text-white font-bold relative">
+                      <div className="w-10 h-10 rounded-full bg-discord-blurple flex items-center justify-center text-white font-bold relative shadow-sm">
                         {friend.username.charAt(0).toUpperCase()}
                         <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#313338] rounded-full"></div>
                       </div>
-                      <span className="text-white font-medium">{friend.username}</span>
+                      <div className="flex flex-col">
+                        <span className="text-white font-medium text-sm group-hover:underline">
+                          {friend.username}
+                        </span>
+                        <span className="text-xs text-discord-textMuted">Disponível</span>
+                      </div>
                     </div>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onSelectFriend(friend.username)
+                      }}
+                      className="w-9 h-9 rounded-full bg-[#2b2d31] flex items-center justify-center text-discord-textMuted group-hover:text-white hover:bg-[#1e1f22] transition-colors"
+                      title="Enviar Mensagem"
+                    >
+                      <MessageSquare size={18} />
+                    </button>
                   </div>
                 ))}
               </div>

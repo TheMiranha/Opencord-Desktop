@@ -33,7 +33,13 @@
   -webkit-app-region: drag;
 }
 
-/* Evita que botões fiquem bloqueados dentro da área de arrasto */
-.no-drag {
+/* Garante que todos os controles interativos recebam cliques, foco e digitação */
+.no-drag,
+input,
+textarea,
+button,
+select,
+a,
+[contenteditable="true"] {
   -webkit-app-region: no-drag;
 }
