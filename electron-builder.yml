@@ -1,5 +1,5 @@
 appId: com.miranda.opencord
-productName: opencord-desktop
+productName: Opencord
 directories:
   buildResources: build
 files:
@@ -12,7 +12,7 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: opencord-desktop
+  executableName: Opencord
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
