@@ -35,7 +35,19 @@ export function Dashboard(): React.JSX.Element {
 
   // Stores
   const { apiUrl, livekitUrl, token, currentUser, setCurrentUser, logout, syncFromStorage } = useAuthStore()
-  const { activeServerId, serverChannelsCache, lastVisitedChannel, setServers, setServerChannelsCache, setServerMembersCache, setLastVisitedChannel } = useServerStore()
+  const {
+    activeServerId,
+    serverChannelsCache,
+    lastVisitedChannel,
+    setServers,
+    setServerChannelsCache,
+    setServerMembersCache,
+    setLastVisitedChannel,
+    setServerVoiceStates,
+    handleVoiceJoin,
+    handleVoiceLeave,
+    handleVoiceStateUpdate
+  } = useServerStore()
   const { dmChannels, viewingChannelId, setDmChannels, setViewingChannelId } = useChannelStore()
   const { messages, stompClient, setMessages, setStompClient, addMessage } = useChatStore()
   const {
@@ -115,6 +127,30 @@ export function Dashboard(): React.JSX.Element {
     }
   }
 
+  const handleServerVoiceEvent = (msg: any) => {
+    try {
+      const payload = JSON.parse(msg.body)
+      const { event, serverId, channelId, userId, participant } = payload
+      if (!serverId || !channelId) return
+
+      if (event === 'VOICE_JOIN' && participant) {
+        handleVoiceJoin(serverId, channelId, participant)
+      } else if (event === 'VOICE_LEAVE' && userId) {
+        handleVoiceLeave(serverId, channelId, userId)
+      } else if (event === 'VOICE_STATE_UPDATE' && participant) {
+        handleVoiceStateUpdate(
+          serverId,
+          channelId,
+          userId,
+          participant.isMuted,
+          participant.isDeafened
+        )
+      }
+    } catch (err) {
+      console.error('Erro ao processar evento de voz via WS:', err)
+    }
+  }
+
   // Inicialização de Dados e WebSocket
   useEffect(() => {
     const effectiveToken = token || localStorage.getItem('JWT_TOKEN')
@@ -168,10 +204,11 @@ export function Dashboard(): React.JSX.Element {
               }
             })
 
-            // 2. Inscrever nos servidores do usuário para receber eventos de canais
+            // 2. Inscrever nos servidores do usuário para receber eventos de canais e voz
             loadedServers.forEach((srv: any) => {
               if (!subscribedServers.current.has(srv.id)) {
                 activeStompClient!.subscribe(`/topic/server.${srv.id}.channels`, handleServerChannelEvent)
+                activeStompClient!.subscribe(`/topic/server.${srv.id}.voice`, handleServerVoiceEvent)
                 subscribedServers.current.add(srv.id)
               }
             })
@@ -264,6 +301,7 @@ export function Dashboard(): React.JSX.Element {
 
             if (!subscribedServers.current.has(activeServerId)) {
               stompClient.subscribe(`/topic/server.${activeServerId}.channels`, handleServerChannelEvent)
+              stompClient.subscribe(`/topic/server.${activeServerId}.voice`, handleServerVoiceEvent)
               subscribedServers.current.add(activeServerId)
             }
           }
@@ -277,6 +315,16 @@ export function Dashboard(): React.JSX.Element {
           const membersData = await membersRes.json()
           const fetchedMembers = Array.isArray(membersData) ? membersData : membersData.data || []
           setServerMembersCache((prev) => ({ ...prev, [activeServerId]: fetchedMembers }))
+        }
+
+        // 3. Estados de Voz dos Canais
+        const voiceRes = await fetch(`${apiUrl}/server/${activeServerId}/voice-states`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (voiceRes.ok) {
+          const voiceData = await voiceRes.json()
+          const states = voiceData.data || voiceData || {}
+          setServerVoiceStates(activeServerId, states)
         }
       } catch (err) {
         console.error('Erro ao buscar dados do servidor', err)
@@ -525,12 +573,19 @@ export function Dashboard(): React.JSX.Element {
     }
 
     document.querySelectorAll('audio[id^="track-"]').forEach((el) => el.remove())
+
+    // Notifica o backend sobre a saída da chamada
+    fetch(`${apiUrl}/calls/leave`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch((err) => console.error('Erro ao notificar saída da chamada:', err))
   }
 
   const toggleMute = async (forceState?: boolean) => {
     const currentMuted = useVoiceStore.getState().isMuted
     const currentDeafened = useVoiceStore.getState().isDeafened
     const room = useVoiceStore.getState().livekitRoom
+    const channelId = useVoiceStore.getState().activeVoiceChannelId
 
     const nextMuted = typeof forceState === 'boolean' ? forceState : !currentMuted
     setIsMuted(nextMuted)
@@ -552,11 +607,27 @@ export function Dashboard(): React.JSX.Element {
         console.error('Erro ao alternar microfone no LiveKit:', err)
       }
     }
+
+    if (channelId) {
+      fetch(`${apiUrl}/calls/state`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          channelId,
+          isMuted: nextMuted,
+          isDeafened: currentDeafened
+        })
+      }).catch((err) => console.error('Erro ao atualizar voice state:', err))
+    }
   }
 
   const toggleDeafen = async () => {
     const currentDeaf = useVoiceStore.getState().isDeafened
     const currentMuted = useVoiceStore.getState().isMuted
+    const channelId = useVoiceStore.getState().activeVoiceChannelId
 
     const nextDeaf = !currentDeaf
     setIsDeafened(nextDeaf)
@@ -575,6 +646,21 @@ export function Dashboard(): React.JSX.Element {
         el.muted = nextDeaf || userVol === 0
       }
     })
+
+    if (channelId) {
+      fetch(`${apiUrl}/calls/state`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          channelId,
+          isMuted: useVoiceStore.getState().isMuted,
+          isDeafened: nextDeaf
+        })
+      }).catch((err) => console.error('Erro ao atualizar voice state:', err))
+    }
   }
 
   // Atalhos de teclado (Locais e Globais via IPC)

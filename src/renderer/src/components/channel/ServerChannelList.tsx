@@ -7,7 +7,7 @@ import { useModalStore } from '../../stores/useModalStore'
 import { UserAvatar } from '../common/UserAvatar'
 import { ParticipantVolumePopover } from '../voice/ParticipantVolumePopover'
 
-import { Hash, Volume2, MicOff, VolumeX, Volume1, Plus, Trash2 } from 'lucide-react'
+import { Hash, Volume2, MicOff, Headphones, VolumeX, Volume1, Plus, Trash2 } from 'lucide-react'
 
 interface ServerChannelListProps {
   onSelectChannel: (channelId: string) => void
@@ -19,9 +19,9 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
   onJoinVoice
 }) => {
   const [volumePopoverIdentity, setVolumePopoverIdentity] = useState<string | null>(null)
-  const { activeServerId, serverChannelsCache, serverMembersCache } = useServerStore()
+  const { activeServerId, serverChannelsCache, serverMembersCache, serverVoiceStates } = useServerStore()
   const { viewingChannelId } = useChannelStore()
-  const { activeVoiceChannelId, isMuted, remoteParticipants, userVolumes } = useVoiceStore()
+  const { activeVoiceChannelId, userVolumes } = useVoiceStore()
   const { currentUser } = useAuthStore()
   const { openCreateChannelModal, openDeleteChannelModal } = useModalStore()
 
@@ -47,7 +47,7 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-2 py-3 pb-28 flex flex-col gap-0.5">
+    <div className="flex-1 overflow-y-auto px-2 py-3 pb-28 flex flex-col gap-0.5 select-none">
       {/* Canais de Texto */}
       <div className="px-1 pt-2 pb-1 flex items-center justify-between text-discord-textMuted group/header">
         <div className="text-[12px] font-bold uppercase tracking-wider flex items-center gap-1">
@@ -110,6 +110,7 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
       {voiceChannels.map((ch) => {
         const isConnected = activeVoiceChannelId === ch.id
         const isViewing = viewingChannelId === ch.id
+        const participants = activeServerId ? serverVoiceStates[activeServerId]?.[ch.id] || [] : []
 
         return (
           <div key={ch.id} className="flex flex-col">
@@ -142,69 +143,70 @@ export const ServerChannelList: React.FC<ServerChannelListProps> = ({
               </button>
             </div>
 
-            {/* Participantes conectados */}
-            {isConnected && (
+            {/* Participantes conectados no canal de voz (visíveis antes e depois de entrar na call) */}
+            {participants.length > 0 && (
               <div className="flex flex-col gap-[2px] mt-1 pl-7 pr-2 mb-2">
-                <div className="flex items-center gap-2 px-2 py-1 rounded hover:bg-[#35373c] cursor-pointer group">
-                  <UserAvatar
-                    username={currentUser?.username || 'Você'}
-                    avatarUrl={currentUser?.avatarUrl}
-                    size="xs"
-                    status="online"
-                  />
-                  <span className="text-discord-textMuted text-[13px] font-medium truncate group-hover:text-discord-textNormal">
-                    {currentUser?.username}
-                  </span>
-                  {isMuted && (
-                    <MicOff size={14} className="ml-auto text-discord-danger flex-shrink-0" />
-                  )}
-                </div>
-
-                {remoteParticipants.map((identity) => {
-                  const userVol = typeof userVolumes[identity] === 'number' ? userVolumes[identity] : 100
-                  const isPopoverOpen = volumePopoverIdentity === identity
+                {participants.map((p) => {
+                  const isMe = currentUser?.id === p.userId || currentUser?.username === p.username
+                  const userVol = typeof userVolumes[p.username] === 'number' ? userVolumes[p.username] : 100
+                  const isPopoverOpen = volumePopoverIdentity === p.username
 
                   return (
                     <div
-                      key={identity}
+                      key={p.userId}
                       className="relative flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-[#35373c] cursor-pointer group"
                     >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <UserAvatar
-                          username={identity}
-                          avatarUrl={getParticipantAvatar(identity)}
+                          username={p.username}
+                          avatarUrl={p.avatarUrl || getParticipantAvatar(p.username)}
                           size="xs"
                           status="online"
                         />
                         <span className="text-discord-textMuted text-[13px] font-medium truncate group-hover:text-discord-textNormal">
-                          {identity}
+                          {p.username} {isMe && <span className="text-[11px] opacity-70">(Você)</span>}
                         </span>
                       </div>
 
-                      {/* Botão de Ajustar Volume */}
-                      <div className="relative flex items-center">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setVolumePopoverIdentity(isPopoverOpen ? null : identity)
-                          }}
-                          className={`p-1 rounded transition-colors cursor-pointer ${
-                            userVol !== 100 || isPopoverOpen
-                              ? 'text-white bg-[#18191c]'
-                              : 'text-discord-textMuted opacity-0 group-hover:opacity-100 hover:text-white'
-                          }`}
-                          title={`Ajustar volume de ${identity} (${userVol}%)`}
-                        >
-                          {getVolumeIcon(userVol)}
-                        </button>
+                      <div className="flex items-center gap-1">
+                        {p.isMuted && (
+                          <span title="Microfone Mutado" className="flex items-center">
+                            <MicOff size={14} className="text-discord-danger flex-shrink-0" />
+                          </span>
+                        )}
+                        {p.isDeafened && (
+                          <span title="Áudio Desativado" className="flex items-center">
+                            <Headphones size={14} className="text-discord-danger flex-shrink-0" />
+                          </span>
+                        )}
 
-                        {isPopoverOpen && (
-                          <ParticipantVolumePopover
-                            identity={identity}
-                            onClose={() => setVolumePopoverIdentity(null)}
-                            className="top-7 right-0"
-                          />
+                        {/* Botão de Ajustar Volume se estiver no mesmo canal */}
+                        {isConnected && !isMe && (
+                          <div className="relative flex items-center">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setVolumePopoverIdentity(isPopoverOpen ? null : p.username)
+                              }}
+                              className={`p-1 rounded transition-colors cursor-pointer ${
+                                userVol !== 100 || isPopoverOpen
+                                  ? 'text-white bg-[#18191c]'
+                                  : 'text-discord-textMuted opacity-0 group-hover:opacity-100 hover:text-white'
+                              }`}
+                              title={`Ajustar volume de ${p.username} (${userVol}%)`}
+                            >
+                              {getVolumeIcon(userVol)}
+                            </button>
+
+                            {isPopoverOpen && (
+                              <ParticipantVolumePopover
+                                identity={p.username}
+                                onClose={() => setVolumePopoverIdentity(null)}
+                                className="top-7 right-0"
+                              />
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>

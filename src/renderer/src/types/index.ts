@@ -28,6 +28,14 @@ export interface UserProfile {
   mutualServersCount: number
 }
 
+export interface VoiceParticipant {
+  userId: string
+  username: string
+  avatarUrl?: string | null
+  isMuted: boolean
+  isDeafened: boolean
+}
+
 export interface Server {
   id: string
   name: string

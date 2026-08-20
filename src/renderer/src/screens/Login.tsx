@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/useAuthStore'
+import { OpencordLogo } from '../components/common/OpencordLogo'
 
 export function Login() {
   const navigate = useNavigate()
@@ -47,7 +48,8 @@ export function Login() {
   return (
     <div className="flex flex-col h-screen w-screen bg-[#1e1f22] bg-[url('https://theme.zdassets.com/theme_assets/678183/b7e9dce75f9edb23504e13b4699e208f204e5015.png')] bg-cover bg-center overflow-hidden font-sans select-none relative">
       {/* Barra de Título Superior (Drag Region) */}
-      <div className="h-[28px] w-full flex-shrink-0 drag-region flex items-center px-4 z-50">
+      <div className="h-[28px] w-full flex-shrink-0 drag-region flex items-center px-4 gap-2 z-50">
+        <OpencordLogo size={14} className="text-discord-blurple" />
         <span className="text-[#80848e] text-[11px] font-bold uppercase tracking-wider select-none">
           Opencord
         </span>
@@ -55,8 +57,9 @@ export function Login() {
 
       {/* Container Central com o Card */}
       <div className="flex-1 flex items-center justify-center p-4">
-        <div className="w-[480px] rounded-md bg-discord-bg p-8 shadow-2xl no-drag select-text">
-          <div className="mb-8 text-center select-none">
+        <div className="w-[480px] rounded-md bg-discord-bg p-8 shadow-2xl no-drag select-text flex flex-col items-center">
+          <div className="mb-6 flex flex-col items-center text-center select-none">
+            <OpencordLogo size={64} withBackground={true} className="mb-4 shadow-lg rounded-[16px]" />
             <h2 className="text-2xl font-semibold text-discord-header">Boas-vindas de volta!</h2>
             <p className="mt-2 text-[15px] text-discord-textMuted">Estamos muito animados em te ver novamente!</p>
           </div>

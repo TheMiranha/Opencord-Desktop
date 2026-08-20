@@ -3,7 +3,8 @@ import { useServerStore } from '../../stores/useServerStore'
 import { useChannelStore } from '../../stores/useChannelStore'
 import { useModalStore } from '../../stores/useModalStore'
 
-import { Plus, MessageSquare } from 'lucide-react'
+import { Plus } from 'lucide-react'
+import { OpencordLogo } from '../common/OpencordLogo'
 
 export const ServerSidebar: React.FC = () => {
   const { servers, activeServerId, setActiveServerId, lastVisitedChannel, serverChannelsCache } = useServerStore()
@@ -42,7 +43,12 @@ export const ServerSidebar: React.FC = () => {
         }`}
         title="Mensagens Diretas"
       >
-        <MessageSquare size={24} className="transition-transform group-hover:scale-110" />
+        <OpencordLogo
+          size={28}
+          className={`transition-transform group-hover:scale-110 ${
+            activeServerId === null ? 'text-white' : 'text-discord-textNormal group-hover:text-white'
+          }`}
+        />
       </div>
 
       <div className="w-8 h-[2px] bg-[#313338] my-1 rounded flex-shrink-0"></div>
